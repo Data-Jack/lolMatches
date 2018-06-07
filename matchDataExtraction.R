@@ -22,9 +22,9 @@ Match_history <- fromJSON(Match_His_Link)
 # Bulk extract match meta data --------------------------------------------
 
 
-extractMatches <- function(account,start=NULL,end=NULL,REgion = Region,apiKey=api_key){
+extractMatches <- function(account,start=NULL,end=NULL,region = Region,apiKey=api_key){
   
-paste0("https://",Region,".api.riotgames.com/lol/match/v3/matchlists/by-account/",Summoner_ID,"?beginIndex=",start,"&endIndex=",end,"&api_key=",apiKey)
+paste0("https://",region,".api.riotgames.com/lol/match/v3/matchlists/by-account/",Summoner_ID,"?beginIndex=",start,"&endIndex=",end,"&api_key=",apiKey)
 }
 nGames <- 300
 matchHistDF<- tibble(nGamesEnd = as.integer(seq(100,nGames,by=100)),
@@ -32,16 +32,25 @@ matchHistDF<- tibble(nGamesEnd = as.integer(seq(100,nGames,by=100)),
                 mutate(link=map2(nGamesStart, nGamesEnd,~extractMatches(account = account,start = .x,end = .y)),
                        rawJson=map(link,fromJSON),
                        df = map(rawJson,"matches")) %>% 
-                  unnest(df,drop = TRUE) %>% 
+                  unnest(df) %>% 
                     mutate(date = as_datetime(timestamp/1000, origin = as_datetime("1970-01-01")))
 
 
-##################
 
-getMatchStats <- function(x){
-  matchLink<- paste0("https://",Region,".api.riotgames.com/lol/match/v3/matches/",x,"?api_key=",api_key)
+# Get match stats ---------------------------------------------------------
+
+getMatchStats <- function(matchId,region=Region,apiKey=api_key){
+  matchLink<- paste0("https://",region,".api.riotgames.com/lol/match/v3/matches/",matchId,"?api_key=",apiKey)
   mathesIn <- fromJSON(matchLink)
-  mathesIn
+  # print("Sleeping for 2:05 mins zzz...")
+  Sys.sleep(2)
+  return(mathesIn)
 }
 
-matchList <- map(matchRefs,getMatchStats)
+matchHistDFExt<- matchHistDF %>% 
+  select(-nGamesStart,-nGamesEnd) %>% 
+  mutate(Batch = ceiling(row_number()/100)) %>% 
+  group_by(Batch) %>% 
+  nest() %>% 
+  mutate(matchStats = map(data,~.x %>% mutate(map(gameId,getMatchStats))))
+# matchList <- map(matchRefs,getMatchStats)
