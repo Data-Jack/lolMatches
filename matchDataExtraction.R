@@ -4,7 +4,10 @@
 library(jsonlite)
 library(tidyverse)
 library(lubridate)
-
+library(httr)
+library(stringr)
+#Get functions, eventually should be a package?
+source("functions.R")
 # api_key stored in .Rprofile.site
 Region <- "euw1"
 Summoner_Name <- "Proudfeet"
@@ -16,16 +19,9 @@ Summoner_ID <- Summoner_Info_data$accountId
 
 Match_His_Link <- paste("https://",Region,".api.riotgames.com/lol/match/v3/matchlists/by-account/",Summoner_ID,"?api_key=",api_key,sep = "")
 Match_history <- fromJSON(Match_His_Link)
-# nGames <- Match_history$totalGames
-
 
 # Bulk extract match meta data --------------------------------------------
 
-
-extractMatches <- function(account,start=NULL,end=NULL,region = Region,apiKey=api_key){
-  
-paste0("https://",region,".api.riotgames.com/lol/match/v3/matchlists/by-account/",Summoner_ID,"?beginIndex=",start,"&endIndex=",end,"&api_key=",apiKey)
-}
 nGames <- 300
 matchHistDF<- tibble(nGamesEnd = as.integer(seq(100,nGames,by=100)),
                      nGamesStart = as.integer(lag(nGamesEnd, default = 0L))) %>% 
@@ -35,22 +31,10 @@ matchHistDF<- tibble(nGamesEnd = as.integer(seq(100,nGames,by=100)),
                   unnest(df) %>% 
                     mutate(date = as_datetime(timestamp/1000, origin = as_datetime("1970-01-01")))
 
-
-
 # Get match stats ---------------------------------------------------------
-
-getMatchStats <- function(matchId,region=Region,apiKey=api_key){
-  matchLink<- paste0("https://",region,".api.riotgames.com/lol/match/v3/matches/",matchId,"?api_key=",apiKey)
-  mathesIn <- fromJSON(matchLink)
-  # print("Sleeping for 2:05 mins zzz...")
-  Sys.sleep(2)
-  return(mathesIn)
-}
 
 matchHistDFExt<- matchHistDF %>% 
   select(-nGamesStart,-nGamesEnd) %>% 
-  mutate(Batch = ceiling(row_number()/100)) %>% 
-  group_by(Batch) %>% 
-  nest() %>% 
-  mutate(matchStats = map(data,~.x %>% mutate(map(gameId,getMatchStats))))
-# matchList <- map(matchRefs,getMatchStats)
+  mutate(matchStats = map(gameId,~getMatchStats(matchId=as.numeric(.x),region=Region,apiKey=api_key)))
+
+
